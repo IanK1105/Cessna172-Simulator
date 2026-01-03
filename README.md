@@ -10,3 +10,18 @@ Began on the project this week (using intelliJ as my code window), setting up es
 Next step: Complete the core physics module to establish foundational flight dynamics.
 
 --------
+
+1/3/2026:
+
+After hitting complexity issues with advanced physics integration, I made the decision to restart with a simplified, extensible foundation. The new codebase establishes core 6DOF longitudinal flight dynamics using authentic Cessna 172 stability derivatives, and implementing proper rotational inertia. A few features I've added are:
+* near realistic pitching moment modeling with tail volume coefficient
+* Stall-aware damping reduction
+* Density altitude effects on air density
+* Configurable mass (900-1400kg) and environmental conditions
+* Real-time flight instrumentation display
+
+Problem:
+The aircraft freefalls because the pitching moment equation is mis-scaled (especially the Cm_q term and tail volume usage), overdamping pitch rate and collapsing angle of attack so lift can never balance weight.
+A possible solution could be to fix the moment formulation by removing extra scaling (no global damping multipliers, no double tail-volume effects), using the standard nondimensional Cm model, to allow AoA to stabilize naturally and lift to equilibrate gravity without artificial trim hacks.
+
+-----------
