@@ -24,4 +24,21 @@ Problem:
 The aircraft freefalls because the pitching moment equation is mis-scaled (especially the Cm_q term and tail volume usage), overdamping pitch rate and collapsing angle of attack so lift can never balance weight.
 A possible solution could be to fix the moment formulation by removing extra scaling (no global damping multipliers, no double tail-volume effects), using the standard nondimensional Cm model, to allow AoA to stabilize naturally and lift to equilibrate gravity without artificial trim hacks.
 
------------
+--------
+
+1/9/2026:
+
+After fixing the freefall issue by correcting the pitching moment equation (removing overdamped Cm_q and tail volume scaling), the C172 simulator now has trimmed flight. I also replaced the mis-scaled pitch model so AoA naturally stabilizes and lift balances weight without artificial hacks.
+New features added:
+* Flaps: Boost lift/drag, raise stall margin (matches C172 POH behavior)
+*CG: Forward CG = more stable/higher stall speed; aft CG = twitchy/lower stall
+*Trim: Sets equilibrium AoA for hands-off cruise/approach
+Achieved realistic behaviors: Stall curve, density altitude effects, coupled forces/moments, configurable mass—all produce believable speed/pitch/AoA responses.
+
+DISCLAIMER: I feel there is no need to add more on to the code; however, I do not want to say it is completely finalized, and will go back and change/add things if I have to. If there are any major changes I make, I will write a memo.
+
+Next: Systematic experiments
+I want to test how flaps/CG/mass/density altitude change stall speeds, climb rates, approach behavior, and document vs real C172 data.
+
+--------
+
