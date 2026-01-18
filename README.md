@@ -2,7 +2,13 @@
 This is my Java-based flight simulator inspired by the Cessna 172 to practice and expand on the coding skills I am learning in APCSA, while throuroughly integrating basic flight physics and real-world aerodynamics. My goal is to create a fun, educational simulator that models realistic flight behavior. It's a work in progress as I keep learning and adding new features.
 ----------
 ----------
-## Notes
+## How to run (+ additional notes)
+Ways to run the code:
+1. If you have Java installed: download `SimpleFlightSim.jar` and run `java -jar SImpleFlightSim.jar`
+2. Compile (copy and paste) the code into any Java IDE
+
+### Notes
+   
 - Not a game or full flight simulator.
 - An educational physics model focused on trends, not exact certification accuracy.
 - Lift/drag model with stall behavior.
