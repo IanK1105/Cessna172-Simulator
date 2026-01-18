@@ -61,3 +61,9 @@ I want to test how flaps/CG/mass/density altitude change stall speeds, climb rat
 
 --------
 
+1/17/2026:
+
+Updated the GitHub repo:
+- I’ve posted both the runnable JAR and the original Java code so anyone can access the project, and added instructions and notes in the README for how to run it and more about this project. I’ve also been using the simulator to prep for my upcoming experiments and test different flight conditions.
+
+---------
