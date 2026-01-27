@@ -1,8 +1,8 @@
 # Cessna172-Simulator
-This is my Java-based flight simulator inspired by the Cessna 172 to practice and expand on the coding skills I am learning in APCSA, while throuroughly integrating basic flight physics and real-world aerodynamics. My goal is to create a fun, educational simulator that models realistic flight behavior. It's a work in progress as I keep learning and adding new features.
+This is my Java-based flight simulator inspired by the Cessna 172 to practice and expand on the coding skills I am learning in APCSA, while throuroughly integrating basic flight physics and real-world aerodynamics. My goal is to create a fun, educational simulator that models realistic flight behavior. It's a work in progress as I keep learning and adding new features. 
 ----------
 ----------
-## How to run (+ additional notes)
+## How to run (Go to the *SimpleC172Sim.java*  file to see the code)
 Ways to run the code:
 1. If you have Java installed: download `SimpleFlightSim.jar` and run `java -jar SImpleFlightSim.jar`
 2. Compile (copy and paste) the code into any Java IDE
