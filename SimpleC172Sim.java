@@ -40,11 +40,11 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
     // controls
     double throttle = 0.4;
     double elevator = 0.0;
-    double trimElevator = 0.0;  // NEW: Trim setting
-    double flaps = 0.0;          // NEW: 0.0 = up, 1.0 = full (40 degrees for C172)
-    double cgPosition = 0.0;     // NEW: -1.0 = aft limit, 0.0 = neutral, +1.0 = forward limit
+    double trimElevator = 0.0;  
+    double flaps = 0.0;          
+    double cgPosition = 0.0;     
 
-    // diagnostics?
+    // diagnostics
     double aoa = 0.0;
     boolean stalled = false;
 
