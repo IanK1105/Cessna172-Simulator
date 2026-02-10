@@ -11,15 +11,50 @@ Ways to run the code:
    
 - Not a game or full flight simulator.
 - An educational physics model focused on trends, not exact certification accuracy.
-- Lift/drag model with stall behavior.
-- Pitch dynamics (Cmα, Cm_q, elevator).
-- Density altitude effects.
-- Mass / wing loading variation.
-- Real-time visualization (Java Swing).
-- Simplified thrust model.
-- No propwash on tail.
-- No lateral/directional dynamics.
 - Controls are shown on the simulator.
+
+### Features
+
+Core Aerodynamics:
+
+- Lift/drag model with linear pre-stall behavior and post-stall degradation
+- Enhanced stall modeling with gradual lift decay, increased drag, and pitching moment changes
+- Stall hysteresis (different entry/recovery angles of attack)
+- Stall warning system with visual indicators
+- Flap effects on lift, drag, and stall characteristics
+
+Flight Dynamics:
+
+- Pitch dynamics with static stability (Cmα) and damping (Cm_q)
+- Elevator control with trim capability
+- CG position effects on stability and control authority
+- First-order pitch response model for educational clarity
+
+Environmental Effects:
+
+- Density altitude adjustments affecting air density and performance
+- Wind/gust modeling via freestream velocity modification (headwind/tailwind)
+
+Aircraft Configuration:
+
+- Mass/wing loading variation (900kg, 1100kg, 1400kg)
+- Variable flap deployment (0-100%)
+- Real-time throttle control
+
+Interface:
+
+- Real-time visualization (Java Swing)
+- Interactive flight controls (keyboard input)
+- Configurable initial conditions
+- Live telemetry display (altitude, speed, AoA, pitch, etc.)
+
+Simplified Model Assumptions:
+
+- Quasi-steady-state aerodynamics (no unsteady effects)
+- No propwash effects on tail surfaces
+- No lateral/directional dynamics (2D longitudinal only)
+- Point-mass thrust model
+
 ----------
 ## Updates
 12/24/2025:
@@ -71,6 +106,12 @@ Updated the GitHub repo:
 1/23/2026:
 
 Conducted an experiment with the simulator, and compared results with real Cessna172 data. Done.
+
+-----------
+
+2/9/2026:
+
+Implemented professor feedback from Thurow, Sharma, and Ahmed. Added wind/gust modeling via freestream modification, enhanced stall model with gradual lift degradation and hysteresis, and stall warning system with visual indicators. All features remain within quasi-steady-state framework as recommended.
 
 -----------
 
