@@ -17,32 +17,38 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
     double maxThrust = 1700.0;
 
     // Physics parameters
-    double densityAlt = 0.0; // Density alt
+    double densityAlt = 0.0;
     JComboBox<String> weightBox;
     JSlider densitySlider;
     JSlider cgSlider;
+
+    // Enhanced stall modeling toggle
+    boolean useEnhancedStall = false;
+    JCheckBox enhancedStallBox;
+
+    // Wind/gust modeling
+    double windX = 0.0; // m/s horizontal wind
+    double windZ = 0.0; // m/s vertical wind (gusts)
+    JSlider windSlider;
+
+    // Stall warning system
+    boolean stallWarning = false;
+    double stallWarningThreshold = 0.85; // Warn at 85% of stall AoA
 
     // state
     double x = 0.0, z = 100.0;
     double vx = 50.0, vz = 0.0;
     double pitch = Math.toRadians(5);
-    double maxElevatorDeflection = Math.toRadians(20);
-    // --- ADD near state variables ---
-    double pitchRate = 0.0;        // rad/s
-    double meanChord = 1.5;        // m
-    double Iyy = 1800.0;           // kg·m²
-
+    //This simulator intensionally uses first-order pitch response for clarity
     double Cm_alpha = -0.05;
-    double Cm_elevator = -0.3;
-    double Cm_q = -0.5;
-    double tailVolume = 0.5;
+
 
     // controls
     double throttle = 0.4;
     double elevator = 0.0;
-    double trimElevator = 0.0;  
-    double flaps = 0.0;          
-    double cgPosition = 0.0;     
+    double trimElevator = 0.0;
+    double flaps = 0.0;
+    double cgPosition = 0.0;
 
     // diagnostics
     double aoa = 0.0;
@@ -54,7 +60,6 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
     double nextLogTime = 0.0;
     Timer timer;
 
-    // focus
     private void refocusSim() {
         requestFocusInWindow();
     }
@@ -76,7 +81,7 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
 
         // control panel (right)
         JPanel physicsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
-        physicsPanel.setPreferredSize(new Dimension(220, 180));
+        physicsPanel.setPreferredSize(new Dimension(220, 280));
         physicsPanel.setBackground(Color.GRAY);
         physicsPanel.setFocusable(false);
 
@@ -117,7 +122,6 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
             }
             refocusSim();
         });
-
         mass = 1100;
         physicsPanel.add(weightBox);
 
@@ -137,40 +141,87 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
         });
         physicsPanel.add(cgSlider);
 
+        // Wind/Gust Slider
+        JLabel windLabel = new JLabel("Headwind (+) / Tailwind (-):");
+        windLabel.setForeground(Color.BLACK);
+        physicsPanel.add(windLabel);
+
+        windSlider = new JSlider(-20, 20, 0);
+        windSlider.setMajorTickSpacing(10);
+        windSlider.setPaintTicks(true);
+        windSlider.setPaintLabels(true);
+        windSlider.setFocusable(false);
+        windSlider.addChangeListener(e -> {
+            windX = -windSlider.getValue(); // Negative = headwind reduces groundspeed
+            refocusSim();
+        });
+        physicsPanel.add(windSlider);
+
+        // Enhanced Stall Model Checkbox
+        enhancedStallBox = new JCheckBox("Enhanced Stall Model");
+        enhancedStallBox.setForeground(Color.BLACK);
+        enhancedStallBox.setFocusable(false);
+        enhancedStallBox.addActionListener(e -> {
+            useEnhancedStall = enhancedStallBox.isSelected();
+            refocusSim();
+        });
+        physicsPanel.add(enhancedStallBox);
+
         add(physicsPanel, BorderLayout.EAST);
     }
 
     public void step() {
-        double speed = Math.sqrt(vx * vx + vz * vz);
+        // Apply wind to get airspeed
+        double airspeedX = vx - windX;
+        double airspeedZ = vz - windZ;
+        double speed = Math.sqrt(airspeedX * airspeedX + airspeedZ * airspeedZ);
         if (speed < 1.0) speed = 1.0;
 
-        double gamma = Math.atan2(vz, vx);
+        double gamma = Math.atan2(airspeedZ, airspeedX);
         aoa = pitch - gamma;
 
-        // Flaps effect on lift and drag (C172: 0-10-20-30-40 degrees)
-        double flapAngleDeg = flaps * 40.0; // Max 40 degrees
-        double flapLiftIncrement = 0.02 * flapAngleDeg;  // ~0.8 delta-Cl at full flaps
-        double flapDragIncrement = 0.00015 * flapAngleDeg * flapAngleDeg; // Quadratic drag increase
-        double flapStallMargin = 0.008 * flapAngleDeg;    // ~0.32 delta-Clmax at full flaps
+        // Flaps effect on lift and drag
+        double flapAngleDeg = flaps * 40.0;
+        double flapLiftIncrement = 0.02 * flapAngleDeg;
+        double flapDragIncrement = 0.00015 * flapAngleDeg * flapAngleDeg;
+        double flapStallMargin = 0.008 * flapAngleDeg;
 
-        // Stall model with flap effect
+        // Stall model with enhancement option
         double effectiveClMax = clMax + flapStallMargin;
-        double effectiveStallAoA = stallAoA + Math.toRadians(0.2) * flapAngleDeg; // Small AoA benefit
+        double effectiveStallAoA = stallAoA + Math.toRadians(0.2) * flapAngleDeg;
+
+        // Stall warning system
+        stallWarning = Math.abs(aoa) >= (effectiveStallAoA * stallWarningThreshold);
 
         double aoaClamped = Math.max(-Math.toRadians(40), Math.min(Math.toRadians(40), aoa));
         double cl;
+        double cd = cd0 + flapDragIncrement;
+
         if (Math.abs(aoaClamped) <= effectiveStallAoA) {
+            // Pre-stall: linear lift curve
             cl = clAlpha * aoaClamped + flapLiftIncrement;
             stalled = false;
         } else {
+            // Post-stall
             stalled = true;
             double aoaOver = Math.abs(aoaClamped) - effectiveStallAoA;
-            double decay = Math.exp(-aoaOver / Math.toRadians(10));
-            cl = effectiveClMax * 0.6 * decay * Math.signum(aoaClamped);
-        }
-        cl = Math.max(-effectiveClMax, Math.min(effectiveClMax, cl));
 
-        double cd = cd0 + kInduced * cl * cl + flapDragIncrement;
+            if (useEnhancedStall) {
+                // ENHANCED MODE: Gradual degradation
+                double decay = Math.exp(-aoaOver / Math.toRadians(10));
+                cl = effectiveClMax * 0.6 * decay * Math.signum(aoaClamped);
+
+                // Increased drag in stall
+                cd += 0.2 * (aoaOver / Math.toRadians(10));
+            } else {
+                // BASIC MODE: Simple drop
+                cl = effectiveClMax * 0.5 * Math.signum(aoaClamped);
+                cd += 0.1;
+            }
+        }
+
+        cl = Math.max(-effectiveClMax, Math.min(effectiveClMax, cl));
+        cd += kInduced * cl * cl;
 
         // Density altitude effect
         double tempEffect = 1.0 - densityAlt / 10000.0;
@@ -199,27 +250,25 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
         }
 
         // CG effect on pitch stability and control
-        // C172 CG range: ~35-48 inches aft of datum
-        // Forward CG: more stable, heavier elevator forces, higher stall speed
-        // Aft CG: less stable, lighter elevator forces, lower stall speed, risk of spin
-        double cgStabilityFactor = 0.08 * cgPosition;  // Forward CG increases restoring moment
-        double cgElevatorFactor = 1.0 + 0.25 * cgPosition; // Forward CG needs more deflection
-
-        // CG affects the neutral point and static margin
-        double effectiveCm_alpha = Cm_alpha - cgStabilityFactor;
+        double cgStabilityFactor = 0.08 * cgPosition;
+        double cgElevatorFactor = 1.0 + 0.25 * cgPosition;
+        double stallCmModifier = 0.0;
+        if (stalled && useEnhancedStall) {
+            double aoaOver = Math.abs(aoa) - effectiveStallAoA;
+            stallCmModifier = -0.02 * (aoaOver / Math.toRadians(10));
+        }
+        double effectiveCm_alpha = Cm_alpha + stallCmModifier - cgStabilityFactor;
 
         // Total elevator input includes trim
         double totalElevator = elevator + trimElevator;
 
-        // Pitch control: elevator deflection creates pitching moment
-        // CG position affects how much elevator deflection is needed
+        // Pitch control
         double elevatorEffectiveness = 0.008 / cgElevatorFactor;
         double pitchChange = totalElevator * elevatorEffectiveness;
         pitch += pitchChange;
 
-        // Aerodynamic pitch stability: restoring moment proportional to AoA
-        // This simulates the horizontal stabilizer creating a nose-down moment at high AoA
-        double targetAoA = trimElevator * 0.1; // Trim sets equilibrium AoA
+        // Aerodynamic pitch stability
+        double targetAoA = trimElevator * 0.1;
         double aoaError = aoa - targetAoA;
         double stabilityMoment = effectiveCm_alpha * aoaError * 0.003;
         pitch += stabilityMoment;
@@ -232,14 +281,12 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
         if (simTime >= nextLogTime) {
             double speedMs = Math.sqrt(vx * vx + vz * vz);
             System.out.printf(
-                    "t=%.1f | alt=%.1f | V=%.1f | pitch=%.1f° | AoA=%.1f° | cl=%.3f | L=%.1fN | W=%.1fN | flaps=%.0f%% | trim=%.2f | CG=%.2f | stalled=%b%n",
+                    "t=%.1f | alt=%.1f | V=%.1f | AoA=%.1f° | cl=%.3f | cd=%.3f | wind=%.1f | warn=%b | stalled=%b%n",
                     simTime, z, speedMs,
-                    Math.toDegrees(pitch),
                     Math.toDegrees(aoa),
-                    cl, L, mass * g,
-                    flaps * 100,
-                    trimElevator,
-                    cgPosition,
+                    cl, cd,
+                    windX,
+                    stallWarning,
                     stalled
             );
             nextLogTime += 1.0;
@@ -275,6 +322,13 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
         int planeScreenY = h / 2;
 
         Graphics2D g2 = (Graphics2D) g;
+
+        // Stall warning indicator
+        if (stallWarning) {
+            g2.setColor(new Color(255, 165, 0, 128)); // Orange transparent overlay
+            g2.fillRect(0, 0, w, h);
+        }
+
         g2.setColor(Color.RED);
         AffineTransform old = g2.getTransform();
 
@@ -302,19 +356,32 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
         g2.setTransform(old);
 
         g.setColor(Color.BLACK);
-        g.drawString(String.format("Alt: %.1f m", z), 10, 20);
-        g.drawString(String.format("Speed: %.1f m/s", Math.sqrt(vx * vx + vz * vz)), 10, 35);
-        g.drawString(String.format("Pitch: %.1f°", Math.toDegrees(pitch)), 10, 50);
-        g.drawString(String.format("AoA: %.1f°", Math.toDegrees(aoa)), 10, 65);
-        g.drawString("Stalled: " + stalled, 10, 80);
-        g.drawString(String.format("Throttle: %.2f", throttle), 10, 95);
-        g.drawString(String.format("Elevator: %.2f", elevator), 10, 110);
-        g.drawString(String.format("Trim: %.2f", trimElevator), 10, 125);
-        g.drawString(String.format("Flaps: %.0f%%", flaps * 100), 10, 140);
-        g.drawString(String.format("CG: %.2f", cgPosition), 10, 155);
-        g.drawString(String.format("Density Alt: %.0f m", densityAlt), 10, 170);
-        g.drawString(String.format("Mass: %.0f kg", mass), 10, 185);
-        g.drawString("Controls: Arrows, Q/A=Trim, F/G=Flaps", 10, 200);
+        int yPos = 20;
+        g.drawString(String.format("Alt: %.1f m", z), 10, yPos); yPos += 15;
+        g.drawString(String.format("Speed: %.1f m/s", Math.sqrt(vx * vx + vz * vz)), 10, yPos); yPos += 15;
+        g.drawString(String.format("Pitch: %.1f°", Math.toDegrees(pitch)), 10, yPos); yPos += 15;
+        g.drawString(String.format("AoA: %.1f°", Math.toDegrees(aoa)), 10, yPos); yPos += 15;
+
+        // Stall warning display
+        if (stallWarning) {
+            g.setColor(Color.ORANGE);
+            g.drawString("⚠ STALL WARNING", 10, yPos);
+            g.setColor(Color.BLACK);
+        } else {
+            g.drawString("Stalled: " + stalled, 10, yPos);
+        }
+        yPos += 15;
+
+        g.drawString(String.format("Throttle: %.2f", throttle), 10, yPos); yPos += 15;
+        g.drawString(String.format("Elevator: %.2f", elevator), 10, yPos); yPos += 15;
+        g.drawString(String.format("Trim: %.2f", trimElevator), 10, yPos); yPos += 15;
+        g.drawString(String.format("Flaps: %.0f%%", flaps * 100), 10, yPos); yPos += 15;
+        g.drawString(String.format("CG: %.2f", cgPosition), 10, yPos); yPos += 15;
+        g.drawString(String.format("Wind: %.1f m/s", windX), 10, yPos); yPos += 15;
+        g.drawString(String.format("Density Alt: %.0f m", densityAlt), 10, yPos); yPos += 15;
+        g.drawString(String.format("Mass: %.0f kg", mass), 10, yPos); yPos += 15;
+        g.drawString("Enhanced Stall: " + (useEnhancedStall ? "ON" : "OFF"), 10, yPos); yPos += 15;
+        g.drawString("Controls: Arrows, Q/A=Trim, F/G=Flaps", 10, yPos);
     }
 
     @Override
@@ -330,85 +397,148 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
         else if (code == KeyEvent.VK_DOWN) elevator = Math.max(-1.0, elevator - 0.1);
         else if (code == KeyEvent.VK_RIGHT) throttle = Math.min(1.0, throttle + 0.05);
         else if (code == KeyEvent.VK_LEFT) throttle = Math.max(0.0, throttle - 0.05);
-            // Trim controls
         else if (code == KeyEvent.VK_Q) trimElevator = Math.min(1.0, trimElevator + 0.02);
         else if (code == KeyEvent.VK_A) trimElevator = Math.max(-1.0, trimElevator - 0.02);
-            // Flap controls
-        else if (code == KeyEvent.VK_F) flaps = Math.min(1.0, flaps + 0.25); // 25% increments (notches)
+        else if (code == KeyEvent.VK_F) flaps = Math.min(1.0, flaps + 0.25);
         else if (code == KeyEvent.VK_G) flaps = Math.max(0.0, flaps - 0.25);
     }
     @Override public void keyReleased(KeyEvent e) {}
     @Override public void keyTyped(KeyEvent e) {}
 
-    // Startup menu class
     public static class StartupFrame extends JFrame {
         public StartupFrame() {
-            setTitle("Cessna 172 Flight Setup");
+            setTitle("Cessna 172 Flight Simulator - Setup");
             setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            setLayout(new GridLayout(6, 2, 10, 10));
-            setSize(500, 400);
+            setSize(650, 675);
             setLocationRelativeTo(null);
 
-            // Initial Altitude
-            add(new JLabel("Initial Altitude (m):"));
+            JPanel mainPanel = new JPanel();
+            mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
+            mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
+            mainPanel.setBackground(new Color(240, 240, 245));
+
+            // Title
+            JLabel titleLabel = new JLabel("Cessna 172 Flight Simulator");
+            titleLabel.setFont(new Font("Arial", Font.BOLD, 24));
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            titleLabel.setForeground(new Color(40, 40, 80));
+            mainPanel.add(titleLabel);
+
+            mainPanel.add(Box.createVerticalStrut(10));
+
+            JLabel subtitleLabel = new JLabel("Configure Initial Flight Conditions");
+            subtitleLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+            subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            subtitleLabel.setForeground(new Color(80, 80, 120));
+            mainPanel.add(subtitleLabel);
+
+            mainPanel.add(Box.createVerticalStrut(30));
+
+            // Altitude Panel
+            JPanel altPanel = createSettingPanel("Initial Altitude");
             JSlider altSlider = new JSlider(0, 2000, 100);
             altSlider.setMajorTickSpacing(500);
+            altSlider.setMinorTickSpacing(100);
             altSlider.setPaintTicks(true);
             altSlider.setPaintLabels(true);
-            JLabel altLabel = new JLabel("100 m");
+            altSlider.setBackground(new Color(240, 240, 245));
+            JLabel altLabel = new JLabel("100 m", SwingConstants.CENTER);
+            altLabel.setFont(new Font("Arial", Font.BOLD, 16));
+            altLabel.setForeground(new Color(0, 100, 200));
             altSlider.addChangeListener(e -> altLabel.setText(altSlider.getValue() + " m"));
-            add(altSlider);
-            add(altLabel);
+            altPanel.add(altSlider);
+            altPanel.add(Box.createVerticalStrut(5));
+            altPanel.add(altLabel);
+            mainPanel.add(altPanel);
 
-            // Initial Speed
-            add(new JLabel("Initial Speed (m/s):"));
+            mainPanel.add(Box.createVerticalStrut(15));
+
+            // Speed Panel
+            JPanel speedPanel = createSettingPanel("Initial Airspeed");
             JSlider speedSlider = new JSlider(30, 70, 50);
             speedSlider.setMajorTickSpacing(10);
+            speedSlider.setMinorTickSpacing(5);
             speedSlider.setPaintTicks(true);
             speedSlider.setPaintLabels(true);
-            JLabel speedLabel = new JLabel("50 m/s");
+            speedSlider.setBackground(new Color(240, 240, 245));
+            JLabel speedLabel = new JLabel("50 m/s", SwingConstants.CENTER);
+            speedLabel.setFont(new Font("Arial", Font.BOLD, 16));
+            speedLabel.setForeground(new Color(0, 100, 200));
             speedSlider.addChangeListener(e -> speedLabel.setText(speedSlider.getValue() + " m/s"));
-            add(speedSlider);
-            add(speedLabel);
+            speedPanel.add(speedSlider);
+            speedPanel.add(Box.createVerticalStrut(5));
+            speedPanel.add(speedLabel);
+            mainPanel.add(speedPanel);
 
-            // Initial Throttle
-            add(new JLabel("Initial Throttle:"));
-            JSlider throttleSlider = new JSlider(20, 100, 40);
-            throttleSlider.setMajorTickSpacing(20);
+            mainPanel.add(Box.createVerticalStrut(15));
+
+            // Throttle Panel
+            JPanel throttlePanel = createSettingPanel("Initial Throttle");
+            JSlider throttleSlider = new JSlider(0, 100, 65);
+            throttleSlider.setMajorTickSpacing(25);
+            throttleSlider.setMinorTickSpacing(5);
             throttleSlider.setPaintTicks(true);
             throttleSlider.setPaintLabels(true);
-            JLabel throttleLabel = new JLabel("0.40");
-            throttleSlider.addChangeListener(e -> throttleLabel.setText(String.format("%.2f", throttleSlider.getValue()/100.0)));
-            add(throttleSlider);
-            add(throttleLabel);
+            throttleSlider.setBackground(new Color(240, 240, 245));
+            JLabel throttleLabel = new JLabel("65%", SwingConstants.CENTER);
+            throttleLabel.setFont(new Font("Arial", Font.BOLD, 16));
+            throttleLabel.setForeground(new Color(0, 100, 200));
+            throttleSlider.addChangeListener(e -> throttleLabel.setText(throttleSlider.getValue() + "%"));
+            throttlePanel.add(throttleSlider);
+            throttlePanel.add(Box.createVerticalStrut(5));
+            throttlePanel.add(throttleLabel);
+            mainPanel.add(throttlePanel);
 
-            // Preset buttons
-            JButton cruiseBtn = new JButton("Cruise");
+            mainPanel.add(Box.createVerticalStrut(25));
+
+            // Preset Buttons
+            JPanel presetPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
+            presetPanel.setBackground(new Color(240, 240, 245));
+
+            JButton cruiseBtn = new JButton("Cruise Configuration");
+            cruiseBtn.setFont(new Font("Arial", Font.BOLD, 13));
+            cruiseBtn.setBackground(new Color(100, 150, 200));
+            cruiseBtn.setForeground(Color.WHITE);
+            cruiseBtn.setFocusPainted(false);
+            cruiseBtn.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
             cruiseBtn.addActionListener(e -> {
                 altSlider.setValue(1000);
                 speedSlider.setValue(50);
-                throttleSlider.setValue(40);
+                throttleSlider.setValue(65);
             });
-            add(cruiseBtn);
+            presetPanel.add(cruiseBtn);
 
-            JButton approachBtn = new JButton("Approach");
+            JButton approachBtn = new JButton("Approach Configuration");
+            approachBtn.setFont(new Font("Arial", Font.BOLD, 13));
+            approachBtn.setBackground(new Color(100, 150, 200));
+            approachBtn.setForeground(Color.WHITE);
+            approachBtn.setFocusPainted(false);
+            approachBtn.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
             approachBtn.addActionListener(e -> {
                 altSlider.setValue(300);
                 speedSlider.setValue(45);
-                throttleSlider.setValue(35);
+                throttleSlider.setValue(60);
             });
-            add(approachBtn);
+            presetPanel.add(approachBtn);
 
-            // Start button
-            JButton startBtn = new JButton("Start Flight");
+            mainPanel.add(presetPanel);
+            mainPanel.add(Box.createVerticalStrut(25));
+
+            // Start Button
+            JButton startBtn = new JButton("START FLIGHT");
+            startBtn.setFont(new Font("Arial", Font.BOLD, 18));
+            startBtn.setBackground(new Color(50, 150, 50));
+            startBtn.setForeground(Color.WHITE);
+            startBtn.setAlignmentX(Component.CENTER_ALIGNMENT);
+            startBtn.setFocusPainted(false);
+            startBtn.setBorder(BorderFactory.createEmptyBorder(15, 50, 15, 50));
             startBtn.addActionListener(e -> {
                 double initAlt = altSlider.getValue();
                 double initSpeed = speedSlider.getValue();
                 double initThrottle = throttleSlider.getValue() / 100.0;
 
-                dispose(); // Close startup window
+                dispose();
 
-                // Launch simulator
                 JFrame simFrame = new JFrame("Cessna 172 Physics Simulator");
                 simFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
                 SimpleC172Sim sim = new SimpleC172Sim(initAlt, initSpeed, initThrottle);
@@ -417,10 +547,29 @@ public class SimpleC172Sim extends JPanel implements ActionListener, KeyListener
                 simFrame.setLocationRelativeTo(null);
                 simFrame.setVisible(true);
             });
-            add(startBtn);
-            add(new JLabel()); // spacer
+            mainPanel.add(startBtn);
 
+            add(mainPanel);
             setVisible(true);
+        }
+
+        private JPanel createSettingPanel(String label) {
+            JPanel panel = new JPanel();
+            panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+            panel.setBackground(new Color(240, 240, 245));
+            panel.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(180, 180, 200), 1),
+                    BorderFactory.createEmptyBorder(10, 15, 10, 15)
+            ));
+
+            JLabel titleLabel = new JLabel(label);
+            titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
+            titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            titleLabel.setForeground(new Color(60, 60, 100));
+            panel.add(titleLabel);
+            panel.add(Box.createVerticalStrut(8));
+
+            return panel;
         }
     }
 
