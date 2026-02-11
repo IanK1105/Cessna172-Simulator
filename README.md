@@ -3,9 +3,9 @@ This is my Java-based flight simulator inspired by the Cessna 172 to practice an
 ----------
 ----------
 ## How to run (Go to the *SimpleC172Sim.java*  file to see the code)
-Ways to run the code:
-1. If you have Java installed: download `SimpleFlightSim.jar` and run `java -jar SImpleFlightSim.jar`
-2. Compile (copy and paste) the code into any Java IDE
+Ways to run the code (1 preferably):
+1. Compile (copy and paste) the code into any Java IDE
+2. If you have Java installed, you can install the OUTDATED version: download `SimpleFlightSim.jar` and run `java -jar SImpleFlightSim.jar`
 
 ### Notes
    
