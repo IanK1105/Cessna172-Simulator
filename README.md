@@ -115,7 +115,7 @@ Implemented professor feedback from Thurow, Sharma, and Ahmed. Added wind/gust m
 
 -----------
 
-# Simulator experiment & comparison to Cessna172:
+# Simulator experiment & comparison to Cessna172 (OUTDATED):
 
 ## Experiment 1: Stall Speed vs Flaps & Weight
 
