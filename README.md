@@ -105,7 +105,7 @@ Updated the GitHub repo:
 
 1/23/2026:
 
-Conducted an experiment with the simulator, and compared results with real Cessna172 data. Done.
+Conducted an experiment with the simulator, and compared results with real Cessna172 data.
 
 -----------
 
